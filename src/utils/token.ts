@@ -1,16 +1,22 @@
-import jwt, { Secret } from "jsonwebtoken";
+import jwt, { Secret, SignOptions } from "jsonwebtoken";
 
-const accessSecret: Secret = process.env.ACCESS_TOKEN_SECRET!;
-const refreshSecret: Secret = process.env.REFRESH_TOKEN_SECRET!;
+const accessSecret: Secret = process.env.ACCESS_TOKEN_SECRET as string;
+const refreshSecret: Secret = process.env.REFRESH_TOKEN_SECRET as string;
+if (!accessSecret || !refreshSecret) {
+  throw new Error("JWT secrets are not defined in the environment variables");
+}
+const accessTokenExpire = process.env.ACCESS_TOKEN_EXPIRE as string;
+const refreshTokenExpire = process.env.REFRESH_TOKEN_EXPIRE as string;
 
 export const createAccessToken = (userId: string): string => {
-  return jwt.sign(userId, accessSecret, {
-    expiresIn: process.env.ACCESS_TOKEN_EXPIRE || "15m",
-  });
+  return jwt.sign({userId}, accessSecret, {
+    expiresIn: accessTokenExpire,
+  } as SignOptions);
 };
 
 export const createRefreshToken = (userId: string): string => {
-  return jwt.sign(userId, refreshSecret, {
-    expiresIn: process.env.REFRESH_TOKEN_EXPIRE || "7d",
-  });
+  
+  return jwt.sign({ userId }, refreshSecret, {
+    expiresIn: refreshTokenExpire,
+  } as SignOptions);
 };
