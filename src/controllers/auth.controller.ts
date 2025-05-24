@@ -26,10 +26,25 @@ export const register = async (req: Request, res: Response) => {
     await User.create({name, email, password: hashedPassword });
         createAccessToken(email);
         createRefreshToken(email);
+        const accessToken = await createAccessToken(email);
+    const refreshToken = await createRefreshToken(email);
+        
+    await redisClient.set(email, refreshToken, {
+      EX: 60 * 60 * 24 * 7,
+    });
 
-    res.status(201).json({ message: "User registered" });
-  } catch (error) {
-    res.status(400).json({ error });
+   
+     return res
+      .status(201)
+      .cookie("accessToken", accessToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .json({ message: "User registered", accessToken });
+        } catch (error) {
+    return res.status(400).json({ error });
   }
 };
 
@@ -58,6 +73,7 @@ export const login = async (req: Request, res: Response) => {
 
    
     res
+    .status(200)
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: true,
