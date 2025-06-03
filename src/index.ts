@@ -1,7 +1,7 @@
 import Express  from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
-import router from "./routes/auth.routes.js";
+import router from "./routes/router.auth.js";
 
 import dotenv from "dotenv";
 dotenv.config();

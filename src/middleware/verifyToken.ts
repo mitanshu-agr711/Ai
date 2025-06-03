@@ -5,6 +5,14 @@ import {verifyRefreshToken} from "../utils/tokengenerator.js";
 
 import jwt from "jsonwebtoken";
 
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: string;
+    }
+  }
+}
+
 export const verifyToken = (req: Request, res: Response, next: NextFunction) =>{
   const authHeader = req.headers["authorization"];
   const token = authHeader?.split(" ")[1];
@@ -17,29 +25,35 @@ export const verifyToken = (req: Request, res: Response, next: NextFunction) =>{
   });
 };
 
-export const refreshAccessToken = async (req: Request, res: Response) =>{
+
+export const refreshAccessToken = async (req: Request, res: Response) => {
   try {
     const token = req.cookies?.refreshToken;
-    if (!token) return res.status(401).json({ message: "No token" });
+    const sessionId = req.cookies?.sessionId;
+    if (!token || !sessionId) return res.status(401).json({ message: "No token or session" });
 
-    const payload = verifyRefreshToken(token); 
-    if (!payload) return res.status(403).json({ message: "Invalid token" });
+    
+    const payload = await verifyRefreshToken(token);
+    if (!payload || payload.sessionId !== sessionId) {
+      return res.status(403).json({ message: "Invalid token or session" });
+    }
 
-    const redisToken = await redisClient.get(payload.email);
-    if (redisToken !== token)
-      return res.status(403).json({ message: "Token mismatch" });
-
-    const newAccessToken = createAccessToken(payload.email);
-    const newRefreshToken = await createRefreshToken(payload.email);
+    /
+    await redisClient.del(`refreshToken:${payload.userId}:${sessionId}`);
 
    
-    await redisClient.set(payload.email, newRefreshToken, {
-      EX: 60 * 60 * 24 * 7,
-    });
+    const newAccessToken = createAccessToken(payload.userId);
+    const { token: newRefreshToken, sessionId: newSessionId } = await createRefreshToken(payload.userId);
 
-
+    
     res
       .cookie("refreshToken", newRefreshToken, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .cookie("sessionId", newSessionId, {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
@@ -52,4 +66,5 @@ export const refreshAccessToken = async (req: Request, res: Response) =>{
     res.status(500).json({ message: "Something went wrong" });
   }
 };
+
 

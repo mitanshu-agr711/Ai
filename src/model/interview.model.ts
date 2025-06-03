@@ -5,6 +5,7 @@ export interface IInterview extends Document {
   date: Date;
   practicedBy: mongoose.Types.ObjectId;
 }
+
 const interviewSchema: Schema = new Schema({
   title: {
     type: String,

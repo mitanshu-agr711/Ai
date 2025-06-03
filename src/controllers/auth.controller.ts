@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { User } from "../model/user.model.js";
 import { createAccessToken, createRefreshToken } from "../utils/tokengenerator.js";
 import { redisClient } from "../utils/redisClient.js";
+import { v4 as uuidv4 } from 'uuid';
 
 export const register = async (req: Request, res: Response) => {
   
@@ -24,25 +25,10 @@ export const register = async (req: Request, res: Response) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     await User.create({name, email, password: hashedPassword });
-        createAccessToken(email);
-        createRefreshToken(email);
-        const accessToken = await createAccessToken(email);
-    const refreshToken = await createRefreshToken(email);
-        
-    await redisClient.set(email, refreshToken, {
-      EX: 60 * 60 * 24 * 7,
-    });
-
-   
+       
      return res
       .status(201)
-      .cookie("accessToken", accessToken, {
-        httpOnly: true,
-        secure: true,
-        sameSite: "strict",
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-      })
-      .json({ message: "User registered", accessToken });
+       .json({ message: "User created successfully" });
         } catch (error) {
     return res.status(400).json({ error });
   }
@@ -50,43 +36,53 @@ export const register = async (req: Request, res: Response) => {
 
 
 export const login = async (req: Request, res: Response) => {
-
   try {
     const { email, password } = req.body;
-
-    if (!email || !password)
-      return res.status(400).json({ message: "Email and password are required" });
-
-    const user = await User.findOne({ email });
+    
+   
+    if (!email || !password) return res.status(400).json({ message: "Email and password required" });
+    
+    const user = await User.findOne({ email }).select("+password");
     if (!user) return res.status(404).json({ message: "User not found" });
 
+   
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ message: "Invalid credentials" });
 
-    const accessToken = await createAccessToken(email);
-    const refreshToken = await createRefreshToken(email);
 
-    
-    await redisClient.set(email, refreshToken, {
-      EX: 60 * 60 * 24 * 7,
-    });
-
+    const userId = user._id.toString();
+    const sessionId = uuidv4();
+    const accessToken = createAccessToken(userId);
+    const refreshToken = await createRefreshToken(userId, sessionId);
    
     res
-    .status(200)
+      .status(200)
       .cookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: true,
         sameSite: "strict",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       })
-      .json({ accessToken });
+      .cookie("sessionId", sessionId, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 7 * 24 * 60 * 60 * 1000,
+      })
+      .json({
+        user: { id: userId, email: user.email },
+        accessToken,
+        message: "Login successful"
+      });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+
 
 // export const logout = async (req: Request, res: Response) => {
 //   const token = req.cookies.refreshToken;
